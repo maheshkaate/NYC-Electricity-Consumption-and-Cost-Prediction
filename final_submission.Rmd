@@ -1,0 +1,607 @@
+---
+title: "Final_submission"
+author: "Mahesh Kate"
+date: "2023-05-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+#Importing libraries
+
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(skimr)
+library(gapminder)
+library(hablar)
+
+```
+
+
+##Data Cleaning
+
+```{r}
+# Read in the CSV file
+data <- read.csv("ECC1.csv", header = TRUE)
+glimpse(data)
+
+```
+
+```{r}
+# Clean the data
+non_numeric_cols <- which(sapply(data, is.character))
+for (i in non_numeric_cols) {
+  data[[i]] <- factor(data[[i]])
+}
+data[data == "NA"] <- NA
+duplicated_rows <- duplicated(data)
+if (sum(duplicated_rows) > 0) {
+  data <- data[!duplicated_rows, ]
+  
+}
+missing_rows <- apply(data, 1, function(x) any(is.na(x)))
+if (sum(missing_rows) > 0) {
+  data <- data[!missing_rows, ]
+}
+
+factor_cols <- which(sapply(data, is.factor))
+for (i in factor_cols) {
+  data[[i]] <- as.character(data[[i]])
+}
+glimpse(data)
+names(data)
+```
+
+```{r}
+# column names to snake case
+data <- data %>%
+janitor::clean_names()
+
+#single column name change
+colnames(data)[18] <- "number_of_days"
+
+names(data)
+
+```
+
+
+```{r}
+#Changing column type of meter_number from chr to int
+#data$meter_number = 
+  #as.integer(as.character(data$meter_number))
+
+# Changing col type of service_start_date and service_end_date to date
+data$service_start_date <-
+  as.Date(data$service_start_date, format = "%m/%d/%Y")
+data$service_end_date <-
+  as.Date(data$service_end_date, format = "%m/%d/%Y")
+
+#write.csv(data, "cleaned_data_Electric_Consumption.csv", row.names = FALSE)
+
+glimpse(data)
+
+```
+
+
+
+```{r}
+
+data <- read.csv("cleaned_datanew.csv")
+glimpse(data)
+
+```
+
+
+
+```{r}
+
+# Split the data into training, validation, and test sets
+train_idx <- sample(nrow(data), 0.8 * nrow(data))
+train_data <- data[train_idx, ]
+remaining_data <- data[-train_idx, ]
+val_idx <- sample(nrow(remaining_data), 0.2 * nrow(remaining_data))
+val_data <- remaining_data[val_idx, ]
+test_data <- remaining_data[-val_idx, ]
+
+```
+
+
+
+```{r}
+# Build the linear regression model
+model <- lm( consumption_kwh ~ current_charges, data = data)
+```
+
+
+
+```{r}
+
+
+# Split the data into training, validation, and test sets
+set.seed(123) # for reproducibility
+train_indices <- sample(nrow(data), 0.7 * nrow(data))
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+# Fit a linear regression model using the training data
+model <- lm(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = data)
+summary(model)
+
+
+# Make predictions on the testing data
+predictions <- predict(model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - predictions))
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+```
+
+
+##Graphs
+
+```{r}
+# Generate box plot of consumption_kwh by rate_class
+ggplot(data = data, aes(x = consumption_kwh, y = rate_class )) +
+  geom_boxplot(fill = "lightblue", color = "black") +
+  labs(title = "Box Plot of Consumption kWh by Rate Class", x = "Consumption kWh", y = "Rate Class")
+```
+
+```{r}
+ggplot(data, aes(x = log(consumption_kwh), y = log(kwh_charges))) + 
+  geom_point(color = "#0072B2") + 
+  facet_wrap(~ borough)+
+  labs(x = "Energy consumption (kWh)", y = "Charges for energy consumption (kWh)") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "black", linewidth = 0.5),
+        axis.text = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black", size = 14, face = "bold"))
+```
+
+
+
+```{r}
+# Aggregate consumption_kwh by revenue_month
+monthly_kwh <- aggregate(consumption_kwh ~ revenue_month + revenue_year, data = data, sum)
+
+# Generate line chart of consumption_kwh by revenue_month
+ggplot(data = monthly_kwh, aes(x = log(consumption_kwh) , y = revenue_month)) +
+  geom_point(color = "blue") +
+  facet_wrap(~ revenue_year) +
+  labs(title = "Point Chart of Consumption kWh by Revenue Month for each Year", x = "Consumption kWh", y =  "Revenue Month")
+```
+
+
+```{r}
+# Create a point plot of the consumption_kwh_norm variable by the borough variable with color
+ggplot(data = data, aes(x = log(consumption_kwh) , y = revenue_month, color = borough)) +
+  geom_point() +
+  facet_grid(~ borough) +
+  labs(title = "Point Plot of Normalized Consumption kWh by Borough", x = "Consumption kWh", y = "revenue_month")
+```
+
+
+```{r}
+df <- read.csv("cleaned_datanew.csv")
+
+# Create a new variable for the year
+df$year <- as.factor(df$revenue_year)
+
+# Create a new variable for the borough
+df$borough <- factor(df$borough)
+
+# Create a scatter plot of consumption kw/hr vs revenue_year, faceted by borough, and colored by borough
+ggplot(df, aes(x = consumption_kwh, y = revenue_year, colour = borough)) +
+  geom_point() +
+  facet_wrap(~borough) +
+  scale_colour_brewer(palette = "Set1") +
+  labs(x = "Consumption (kWh)", y = "Revenue Year", title = "Consumption vs Revenue Year by Borough")
+
+
+```
+
+
+
+```{r}
+# Create a new variable for the consumption kwh
+df$consumption_kwh <- as.numeric(df$consumption_kwh)
+
+# Create a new variable for the vendor name
+df$vendor_name <- factor(df$vendor_name)
+
+# Create a scatter plot of revenue month vs consumption kwh, faceted by vendor name
+ggplot(df, aes(x = revenue_month, y = consumption_kwh)) +
+  geom_point() +
+  facet_wrap(~vendor_name) +
+  labs(x = "Revenue Month", y = "Consumption (kWh)", title = "Consumption vs Revenue Month by Vendor Name")
+
+```
+
+
+
+```{r}
+# Create a new variable for the log of current charges
+df$log_current_charges <- log(df$current_charges)
+
+# Create a bar plot of log_current_charges vs revenue year
+ggplot(df, aes(x = year, y = log_current_charges, fill = revenue_year)) +
+  geom_bar(stat="identity") +
+  labs(x = "Revenue Year", y = "Log Current Charges", title = "Log Current Charges by Revenue Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+
+
+```{r}
+# Create a new variable for the consumption kw/hr
+df$consumption_kwh <- as.numeric(df$consumption_kwh)
+
+# Create a new variable for the current charges
+df$current_charges <- as.numeric(df$current_charges)
+
+# Create a scatter plot of consumption kw/hr vs current charges, with each point colored according to the revenue year
+ggplot(df, aes(x = consumption_kwh, y = current_charges, color = revenue_year)) +
+  geom_point() +
+  labs(x = "Consumption kw/hr", y = "Current Charges") +
+  ggtitle("Consumption kw/hr vs Current Charges")
+```
+
+
+
+
+
+
+```{r}
+# Create a new variable for the charges KW
+df$kwh_charges <- as.numeric(df$kwh_charges)
+
+# Create a line chart of consumption kwh vs charges KW
+ggplot(df, aes(x = consumption_kwh, y = kwh_charges)) +
+  geom_line() +
+  labs(x = "Consumption kwh", y = "Charges KWh") +
+  ggtitle("Consumption kwh vs Charges KWh")
+```
+
+
+
+```{r}
+
+
+# Create a bar chart of log of current charges vs borough, faceted by revenue year
+ggplot(df, aes(y = borough, x = log(current_charges))) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ year) +
+  labs(x = "Log of Current charge", y = "Borough") +
+  ggtitle("Log of Current charge vs Borough, faceted by Revenue year")
+```
+
+
+
+
+
+```{r}
+# Create a bar chart of borough vs other charges
+ggplot(df, aes(x = borough, y = other_charges, fill = borough)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Borough", y = "Other charges") +
+  ggtitle("Borough vs Other charges") +
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+##Linear Regression 
+
+
+```{r}
+# Load the data
+dataset <- read.csv("cleaned_datanew.csv")
+
+# Split the data into training and testing sets
+set.seed(123) # for reproducibility
+train_indices <- sample(nrow(dataset), 0.7 * nrow(dataset))
+train_data <- dataset[train_indices, ]
+test_data <- dataset[-train_indices, ]
+
+# Fit a linear regression model using the training data
+lr_model <- lm(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data)
+summary(lr_model)
+
+# Make predictions on the testing data
+lr_predictions <- predict(lr_model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - lr_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - lr_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - lr_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - lr_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+## Decision Tree
+
+```{r}
+# Load the libraries
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(e1071)
+
+```
+
+
+```{r}
+# Decision Tree Model
+dt_model <- rpart(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data)
+summary(dt_model)
+dt_predictions <- predict(dt_model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - dt_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - dt_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - dt_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - dt_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+```{r}
+# Random Forest Model
+rf_model <- randomForest(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data, ntree = 100)
+summary(rf_model)
+rf_predictions <- predict(rf_model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - rf_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - rf_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - rf_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - rf_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+```{r}
+# SVM Model
+svm_model <- svm(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data)
+svm_predictions <- predict(svm_model, newdata = test_data)
+summary(svm_model)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - svm_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - svm_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - svm_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - svm_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+
+```{r}
+#install.packages("caret")
+
+library(caret)
+# K-Nearest Neighbors Regressor
+knn_model <- knnreg(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data, k = 5)
+summary(knn_model)
+knn_predictions <- predict(knn_model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - knn_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - knn_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - knn_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - knn_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+```{r}
+
+library(nnet)
+# Neural Network Regressor
+nn_model <- nnet(consumption_kwh ~ number_of_days + meter_amr + other_charges, data = train_data, size = 5, linout = TRUE)
+summary(nn_model)
+nn_predictions <- predict(nn_model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$consumption_kwh - nn_predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$consumption_kwh - nn_predictions))
+
+# Calculate R-squared value
+sse <- sum((test_data$consumption_kwh - nn_predictions)^2)
+sst <- sum((test_data$consumption_kwh - mean(test_data$consumption_kwh))^2)
+r_squared <- 1 - (sse / sst)
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$consumption_kwh  - nn_predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+###Graphs for regression model
+
+
+```{r}
+# Plot the actual and predicted values
+ggplot(test_data, aes(x = consumption_kwh, y = lr_predictions)) +
+  geom_point() +
+  #geom_line() +
+  ggtitle("Actual vs. Predicted Values") +
+  xlab("Actual Consumption (kWh)") +
+  ylab("Predicted Consumption (kWh)")+
+  geom_smooth(method = "lm", color = "red", se = FALSE)
+```
+
+
+```{r}
+# Drop the columns that we don't need.
+df1 <- df %>% select(consumption_kwh, number_of_days,  other_charges)
+
+# Fit a linear regression model using the training data.
+model <- lm(consumption_kwh ~ number_of_days +  other_charges, data = train_data)
+model
+# Make predictions on the testing data.
+predictions <- predict(model, newdata = test_data)
+
+# Evaluate the model's performance on the testing data.
+mse <- mean((predictions - test_data$consumption_kwh)^2)
+mse
+# Make predictions on the future data.
+future_data <- data.frame(number_of_days = seq(from = 30, to = 90, by = 30))
+future_data <- future_data %>%
+  mutate(other_charges = 0)
+  
+
+future_predictions <- predict(model, newdata = future_data)
+future_predictions
+# Plot the actual and predicted values.
+ggplot(df1, aes(x = number_of_days, y = consumption_kwh)) +
+  geom_point(color = "black") +
+  geom_line(data = future_data, aes(y = future_predictions), color = "blue",size = 2) +
+  ggtitle("Actual vs. Predicted Consumption") +
+  xlab("Number of Days") +
+  ylab("Consumption (kWh)")
+```
+
+
+```{r}
+# Fit a linear regression model using the training data
+model <- lm(kwh_charges ~ number_of_days + meter_amr + other_charges, data = train_data)
+summary(model)
+
+# Make predictions on the testing data
+predictions <- predict(model, newdata = test_data)
+
+# Calculate the root mean squared error (RMSE) of the predictions
+rmse <- sqrt(mean((test_data$kwh_charges - predictions)^2))
+
+# Calculate the mean absolute error (MAE) of the predictions
+mae <- mean(abs(test_data$kwh_charges - predictions))
+
+# Print the MSE, RMSE, MAE, and R-squared value of the model
+cat("MSE:", mean((test_data$kwh_charges  - predictions)^2), "\n")
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+cat("R-squared:", summary(model)$r.squared, "\n")
+
+# Plot the actual and predicted values
+ggplot(test_data, aes(x = kwh_charges, y = predictions)) +
+  geom_point() +
+  #geom_line() +
+  ggtitle("Actual vs. Predicted Values") +
+  xlab("Actual kwh_charges") +
+  ylab("Predicted kwh_charges")+
+  geom_smooth(method = "lm", color = "red", se = FALSE)
+```
+
+
+```{r}
+
+# Plot the predicted values and the actual values on a graph
+ggplot(test_data, aes(x =log(current_charges)  , y = log(consumption_kw))) +
+  geom_point() +
+ # facet_wrap(~revenue_year)+
+  geom_smooth(method = "lm",se = FALSE , color= "red") +
+  ggtitle("Consumption_kw vs. current_charges") +
+   xlab ("current_charges") +
+  ylab("Consumption_kw")
+```
+
+
+
+```{r}
+# Drop the columns that we don't need.
+df2 <- df %>% select(kwh_charges, number_of_days,  other_charges)
+
+
+# Fit a linear regression model using the training data.
+model <- lm(kwh_charges ~ number_of_days +  other_charges, data = train_data)
+model
+# Make predictions on the testing data.
+predictions <- predict(model, newdata = test_data)
+
+# Evaluate the model's performance on the testing data.
+mse <- mean((predictions - test_data$kwh_charges)^2)
+mse
+# Make predictions on the future data.
+future_data <- data.frame(number_of_days = seq(from = 30, to = 90, by = 30))
+future_data <- future_data %>%
+  mutate(other_charges = 0)
+  
+
+future_predictions <- predict(model, newdata = future_data)
+future_predictions
+# Plot the actual and predicted values.
+ggplot(df, aes(x = number_of_days, y = kwh_charges)) +
+  geom_point(color = "black") +
+  
+  geom_line(data = future_data, aes(y = future_predictions), color = "blue",size = 1) +
+  ggtitle("Actual vs. Predicted Charges") +
+  xlab("Number of Days") +
+  ylab("kwh_charges")
+
+
+
+```
+
